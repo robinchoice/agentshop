@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kasse – Konto „agent“</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./kasse.css">
+</head>
+<body>
+<main id="app">
+  <form id="login" class="login" hidden>
+    <h1>Kasse verbinden</h1>
+    <p id="loginHint">Pairing-Phrase der LNC-Session vom Typ <code>account</code> und ein Passwort für diesen Browser.</p>
+    <label id="phraseLabel">Pairing-Phrase<input id="phrase" autocomplete="off"></label>
+    <label>Passwort<input id="password" type="password" autocomplete="current-password"></label>
+    <button type="submit">Verbinden</button>
+    <p id="loginError" class="error" role="alert"></p>
+  </form>
+
+  <div id="kasse" class="kasse" hidden>
+    <section class="tills">
+      <h2>Zahlt 21 sats ins Budget<small>Jeder QR-Code gilt für eine Zahlung und erneuert sich danach.</small></h2>
+      <div id="tills"></div>
+    </section>
+    <section class="statement">
+      <div class="head">
+        <h1>Konto „agent“<small>Lightning Terminal, nur dieses Budget ist für den Agenten erreichbar</small></h1>
+        <div class="bal"><b id="balance">–</b><span>sats verfügbar</span></div>
+      </div>
+      <div class="phases" id="phases"></div>
+      <div class="rows"><table id="ledger"></table></div>
+      <div class="foot">
+        <span>Eingezahlt <b id="paidIn">0</b> von <span id="payers">0</span> Leuten</span>
+        <span>Ausgegeben <b id="spent">0</b></span>
+        <span id="footRight"></span>
+      </div>
+    </section>
+  </div>
+</main>
+<script type="module" src="./app.ts"></script>
+</body>
+</html>

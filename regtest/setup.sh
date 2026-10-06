@@ -43,5 +43,8 @@ lit accounts create 0 --label agent --save_to /root/.lit/agent.macaroon >/dev/nu
 account=$(lit accounts list | jq -r '.accounts[] | select(.label == "agent") | .id')
 phrase=$(lit sessions add --label agent --type account --account_id "$account" | jq -r .session.pairing_secret_mnemonic)
 
+# The beamer checkout reads the shop's unpaid invoices with this macaroon.
+dc cp laden:/root/.lnd/data/chain/bitcoin/regtest/readonly.macaroon laden-readonly.macaroon >/dev/null
+
 echo "Account agent: $account (balance 0, fill it with regtest/publikum.sh)"
 echo "LNC pairing phrase for lnget: $phrase"

@@ -40,6 +40,8 @@ services:
       - ./laden.conf:/conf/lit.conf:ro
       - laden:/root/.lnd
       - laden-lit:/root/.lit
+    ports:
+      - "127.0.0.1:8081:8080"
 
   aperture:
     image: lightninglabs/aperture:v0.4.2

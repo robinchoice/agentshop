@@ -14,6 +14,7 @@ Item content is German, the workshop runs in German.
 
 - `src/shop.ts`: the shop. `:8403` serves the catalog and the x402 checkout (`/x402/<item>`). `:8401` serves `/l402/<item>` and is only meant to sit behind Aperture.
 - `src/x402get.ts`: x402 buyer, the counterpart to `lnget`. Shows the challenge, pays within `--max-cost`, prints the Basescan link. Exit code 2 when the price is above the cap, like lnget.
+- `src/kasse/`: the beamer checkout. Three rotating QR codes pay into the agent's account, next to a live statement of that account: deposits, purchases, and requests the agent did not pay. The page connects to the account via LNC in the browser; the small server adds the shop node's unpaid invoices.
 - `regtest/`: the whole demo on regtest with Docker: `bank` (litd holding the agent's account), `laden` (the shop's node), Aperture on `:8402`, the shop on `:8403`.
 
 ## Regtest
@@ -24,6 +25,16 @@ echo "X402_PAY_TO=0x…" > .env      # any address you control on Base Sepolia
 regtest/setup.sh                   # nodes, channels, LiT account "agent" (balance 0), LNC pairing phrase
 regtest/publikum.sh 5              # five people pay 21 sats into the agent's account
 ```
+
+Show the beamer checkout. It needs its own LNC session on the account (a pairing phrase works only once):
+
+```bash
+docker compose -f regtest/compose.yml --env-file .env exec bank litcli --network=regtest \
+  sessions add --label kasse --type account --account_id <account id from setup.sh>
+LADEN_MACAROON=regtest/laden-readonly.macaroon bun run kasse   # http://localhost:8404
+```
+
+Press `k` on the page to toggle the final tally (Kassensturz).
 
 Buy with [lnget](https://github.com/lightninglabs/lnget), connected via LNC to a session that can only spend from the `agent` account:
 
