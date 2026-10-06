@@ -1,0 +1,71 @@
+# Complete demo on regtest: the agent's bank, the shop's node, Aperture and the shop.
+# Setup: regtest/setup.sh
+name: agentshop-regtest
+
+x-litd: &litd
+  image: lightninglabs/lightning-terminal:v0.16.0-alpha
+  restart: unless-stopped
+  depends_on:
+    bitcoind:
+      condition: service_healthy
+
+services:
+  bitcoind:
+    image: lightninglabs/bitcoin-core:30
+    command: [-regtest, -server, -rpcuser=regtest, -rpcpassword=regtest, -rpcallowip=0.0.0.0/0,
+              -rpcbind=0.0.0.0, -fallbackfee=0.00001, -zmqpubrawblock=tcp://0.0.0.0:28332,
+              -zmqpubrawtx=tcp://0.0.0.0:28333]
+    healthcheck:
+      test: [CMD, bitcoin-cli, -regtest, -rpcuser=regtest, -rpcpassword=regtest, getblockchaininfo]
+      interval: 5s
+      retries: 10
+
+  # The agent's bank (stands in for the StartOS node): LiT with the "agent" account.
+  bank:
+    <<: *litd
+    entrypoint: [litd, --configfile=/conf/lit.conf]
+    volumes:
+      - ./bank.conf:/conf/lit.conf:ro
+      - bank:/root/.lnd
+      - bank-lit:/root/.lit
+    ports:
+      - "127.0.0.1:8443:8443"
+      - "127.0.0.1:10009:10009"
+
+  # The shop's own node (stands in for the laptop's neutrino LND).
+  laden:
+    <<: *litd
+    entrypoint: [litd, --configfile=/conf/lit.conf]
+    volumes:
+      - ./laden.conf:/conf/lit.conf:ro
+      - laden:/root/.lnd
+      - laden-lit:/root/.lit
+
+  aperture:
+    image: lightninglabs/aperture:v0.4.2
+    platform: linux/amd64
+    restart: unless-stopped
+    entrypoint: [aperture, --configfile=/conf/aperture.yaml]
+    volumes:
+      - ./aperture.yaml:/conf/aperture.yaml:ro
+      - laden:/lnd:ro
+    ports:
+      - "127.0.0.1:8402:8402"
+
+  shop:
+    image: oven/bun:1
+    restart: unless-stopped
+    working_dir: /app
+    command: [bun, src/shop.ts]
+    environment:
+      X402_PAY_TO: ${X402_PAY_TO:?set X402_PAY_TO in .env}
+    volumes:
+      - ..:/app:ro
+    ports:
+      - "127.0.0.1:8403:8403"
+
+volumes:
+  bank:
+  bank-lit:
+  laden:
+  laden-lit:

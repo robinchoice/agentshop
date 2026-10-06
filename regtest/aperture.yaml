@@ -1,0 +1,31 @@
+listenaddr: "0.0.0.0:8402"
+insecure: true
+debuglevel: info
+dbbackend: sqlite
+sqlite:
+  dbfile: /root/.aperture/aperture.db
+authenticator:
+  network: regtest
+  lndhost: laden:10009
+  tlspath: /lnd/tls.cert
+  macdir: /lnd/data/chain/bitcoin/regtest
+# One service per item: a token bought for the quote does not open the report.
+services:
+  - name: zitat
+    hostregexp: '.*'
+    pathregexp: '^/l402/zitat$'
+    address: shop:8401
+    protocol: http
+    price: 5
+  - name: meme
+    hostregexp: '.*'
+    pathregexp: '^/l402/meme$'
+    address: shop:8401
+    protocol: http
+    price: 21
+  - name: report
+    hostregexp: '.*'
+    pathregexp: '^/l402/report$'
+    address: shop:8401
+    protocol: http
+    price: 210
