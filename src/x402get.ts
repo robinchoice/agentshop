@@ -4,6 +4,7 @@ import { parseArgs } from "node:util";
 import { wrapFetchWithPayment, x402Client, decodePaymentResponseHeader } from "@x402/fetch";
 import { ExactEvmScheme } from "@x402/evm/exact/client";
 import { privateKeyToAccount } from "viem/accounts";
+import { network } from "./catalog";
 
 const { values, positionals } = parseArgs({
   allowPositionals: true,
@@ -20,7 +21,7 @@ const decode = (header: string) => JSON.parse(Buffer.from(header, "base64").toSt
 
 const account = privateKeyToAccount(key);
 const client = new x402Client()
-  .register("eip155:84532", new ExactEvmScheme(account))
+  .register(network, new ExactEvmScheme(account))
   .onBeforePaymentCreation(async ({ paymentRequired }) => {
     console.error("← 402 Payment Required");
     console.error(JSON.stringify(paymentRequired.accepts, null, 2));

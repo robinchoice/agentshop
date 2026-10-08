@@ -4,6 +4,7 @@ name: agentshop-regtest
 
 x-litd: &litd
   image: lightninglabs/lightning-terminal:v0.16.0-alpha
+  entrypoint: [litd, --configfile=/conf/lit.conf]
   restart: unless-stopped
   depends_on:
     bitcoind:
@@ -23,7 +24,6 @@ services:
   # The agent's bank (stands in for the StartOS node): LiT with the "agent" account.
   bank:
     <<: *litd
-    entrypoint: [litd, --configfile=/conf/lit.conf]
     volumes:
       - ./bank.conf:/conf/lit.conf:ro
       - bank:/root/.lnd
@@ -35,7 +35,6 @@ services:
   # The shop's own node (stands in for the laptop's neutrino LND).
   laden:
     <<: *litd
-    entrypoint: [litd, --configfile=/conf/lit.conf]
     volumes:
       - ./laden.conf:/conf/lit.conf:ro
       - laden:/root/.lnd

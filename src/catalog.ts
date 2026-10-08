@@ -1,3 +1,5 @@
+export const network = "eip155:84532"; // Base Sepolia
+
 export type Item = {
   id: string;
   name: string;

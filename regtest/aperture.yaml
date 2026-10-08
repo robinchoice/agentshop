@@ -10,6 +10,7 @@ authenticator:
   tlspath: /lnd/tls.cert
   macdir: /lnd/data/chain/bitcoin/regtest
 # One service per item: a token bought for the quote does not open the report.
+# Prices must match src/catalog.ts (sats).
 services:
   - name: zitat
     hostregexp: '.*'

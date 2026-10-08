@@ -2,18 +2,14 @@ import { Hono } from "hono";
 import { paymentMiddleware, x402ResourceServer } from "@x402/hono";
 import { ExactEvmScheme } from "@x402/evm/exact/server";
 import { HTTPFacilitatorClient } from "@x402/core/server";
-import { catalog } from "./catalog";
+import { catalog, network } from "./catalog";
 
-const network = "eip155:84532"; // Base Sepolia
 const payTo = process.env.X402_PAY_TO;
 const facilitatorUrl = process.env.X402_FACILITATOR_URL ?? "https://x402.org/facilitator";
 if (!payTo) throw new Error("X402_PAY_TO is not set");
 
 // L402 checkout: only reachable through Aperture, which handles payment.
 const l402 = new Hono();
-for (const item of catalog) {
-  l402.get(`/l402/${item.id}`, (c) => c.json(item.content()));
-}
 
 // x402 checkout: payment is handled in-process by the x402 middleware.
 const resourceServer = new x402ResourceServer(
@@ -36,6 +32,7 @@ x402.use(
   ),
 );
 for (const item of catalog) {
+  l402.get(`/l402/${item.id}`, (c) => c.json(item.content()));
   x402.get(`/x402/${item.id}`, (c) => c.json(item.content()));
 }
 

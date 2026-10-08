@@ -3,7 +3,6 @@ import qrcode from "qrcode-generator";
 import { catalog } from "../catalog";
 
 const DEPOSIT_SATS = 21;
-const TILLS = 3;
 const INVOICE_EXPIRY_S = 7200;
 const MEMO = "Budget für den Agenten";
 const ROWS = ["Reihen 1–2", "Reihen 3–4", "Reihen 5–6"];
@@ -136,7 +135,7 @@ async function loop() {
 async function start() {
   $("login").hidden = true;
   $("kasse").hidden = false;
-  tills = await Promise.all(Array.from({ length: TILLS }, (_, i) => newInvoice(i)));
+  tills = await Promise.all(ROWS.map((_, i) => newInvoice(i)));
   renderTills();
   renderFootRight();
   loop();
