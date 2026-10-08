@@ -18,17 +18,13 @@ if (!url || !key) {
 
 const decode = (header: string) => JSON.parse(Buffer.from(header, "base64").toString());
 
-// Step 1: show the challenge, like lnget --no-pay.
-const challenge = await fetch(url);
-if (challenge.status === 402) {
-  console.error("← 402 Payment Required");
-  console.error(JSON.stringify(decode(challenge.headers.get("PAYMENT-REQUIRED")!).accepts, null, 2));
-}
-
-// Step 2: pay within the spend cap and fetch again.
 const account = privateKeyToAccount(key);
 const client = new x402Client()
   .register("eip155:84532", new ExactEvmScheme(account))
+  .onBeforePaymentCreation(async ({ paymentRequired }) => {
+    console.error("← 402 Payment Required");
+    console.error(JSON.stringify(paymentRequired.accepts, null, 2));
+  })
   .setSpendControls({ maxAmountPerPayment: values["max-cost"]! });
 
 try {

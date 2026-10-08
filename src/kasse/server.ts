@@ -14,6 +14,7 @@ async function unpaidRequests() {
     headers: { "Grpc-Metadata-macaroon": macaroon },
     tls: { rejectUnauthorized: false },
   });
+  if (!res.ok) throw new Error(`Shop invoice lookup failed: HTTP ${res.status}`);
   const { invoices = [] } = (await res.json()) as { invoices?: { state: string; value: string; creation_date: string; r_hash: string }[] };
   const groups: { id: string; sats: number; created: number; settled: boolean }[] = [];
   for (const i of invoices.toSorted((a, b) => Number(a.creation_date) - Number(b.creation_date))) {

@@ -26,8 +26,9 @@ for node in bank laden; do
   btc -rpcwallet=miner sendtoaddress "$(ln $node newaddress p2tr | jq -r .address)" 1 >/dev/null
 done
 mine 6
-funded() { [ "$(ln laden walletbalance | jq -r .confirmed_balance)" -gt 0 ]; }
-wait_for funded
+funded() { [ "$(ln "$1" walletbalance | jq -r .confirmed_balance)" -gt 0 ]; }
+wait_for funded bank
+wait_for funded laden
 
 bank_id=$(ln bank getinfo | jq -r .identity_pubkey)
 ln laden connect "$bank_id@bank:9735" >/dev/null || true

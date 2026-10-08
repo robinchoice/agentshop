@@ -4,12 +4,13 @@ import { catalog } from "../catalog";
 
 const DEPOSIT_SATS = 21;
 const TILLS = 3;
+const INVOICE_EXPIRY_S = 7200;
 const MEMO = "Budget für den Agenten";
 const ROWS = ["Reihen 1–2", "Reihen 3–4", "Reihen 5–6"];
 // lnget pays within a second or two. Older unpaid shop invoices count as refused purchases.
 const REFUSED_AFTER_S = 8;
 
-type Till = { request: string; preimage?: string };
+type Till = { request: string; renewAt: number; preimage?: string };
 type Entry = { key: string; time: number; text: string; sats: number; kind: "in" | "out" | "refused" };
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -18,6 +19,7 @@ const lnc = new LightningNodeConnect({ namespace: "agentshop-kasse", allowPasske
 let tills: Till[] = [];
 let sturz = false;
 const seen = new Set<string>();
+let ledgerRendered = false;
 
 const itemName = (sats: number) => catalog.find((i) => i.sats === sats)?.name ?? `${sats} sats`;
 const clock = (unix: number) => new Date(unix * 1000).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
@@ -33,8 +35,8 @@ function qrSvg(request: string) {
 }
 
 async function newInvoice(index: number): Promise<Till> {
-  const res = await lnc.lnd.lightning.addInvoice({ value: String(DEPOSIT_SATS), memo: `${MEMO}, QR ${index + 1}`, expiry: "7200" });
-  return { request: res.paymentRequest };
+  const res = await lnc.lnd.lightning.addInvoice({ value: String(DEPOSIT_SATS), memo: `${MEMO}, QR ${index + 1}`, expiry: String(INVOICE_EXPIRY_S) });
+  return { request: res.paymentRequest, renewAt: Date.now() + (INVOICE_EXPIRY_S - 30) * 1000 };
 }
 
 function renderTills() {
@@ -59,7 +61,13 @@ async function poll() {
     lnc.lnd.lightning.channelBalance(),
     lnc.lnd.lightning.listInvoices({ numMaxInvoices: "1000", reversed: true }),
     lnc.lnd.lightning.listPayments({ includeIncomplete: false }),
-    fetch("/api/unpaid").then((r) => r.json() as Promise<{ id: string; sats: number; created: number }[]>),
+    fetch("/api/unpaid").then((r) => {
+      if (!r.ok) throw new Error(`Shop invoice lookup failed: HTTP ${r.status}`);
+      return r.json() as Promise<{ id: string; sats: number; created: number }[]>;
+    }).catch((err) => {
+      console.error(err);
+      return null;
+    }),
   ]);
 
   const settled = invoices.filter((i) => i.state === ("SETTLED" as never) && i.memo.startsWith(MEMO));
@@ -69,7 +77,7 @@ async function poll() {
   const entries: Entry[] = [
     ...settled.map((i) => ({ key: i.paymentRequest, time: Number(i.settleDate), text: `Einzahlung über ${i.memo.split(", ")[1] ?? "QR"}`, sats: Number(i.value), kind: "in" as const })),
     ...bought.map((p) => ({ key: p.paymentHash, time: Number(p.creationDate), text: `Agent kauft ${itemName(Number(p.valueSat))} per L402`, sats: Number(p.valueSat), kind: "out" as const })),
-    ...unpaid
+    ...(unpaid ?? [])
       .filter((u) => now - u.created > REFUSED_AFTER_S)
       .map((u) => ({ key: u.id, time: u.created, text: `${itemName(u.sats)} angefragt, nicht bezahlt (${u.sats} sats)`, sats: 0, kind: "refused" as const })),
   ].sort((a, b) => b.time - a.time);
@@ -83,9 +91,10 @@ async function poll() {
   if ($("rest")) $("rest").textContent = fmt(bal);
 
   const phase = sturz ? 2 : entries.some((e) => e.kind !== "in") ? 1 : 0;
-  $("phases").innerHTML = ["Einzahlen", "Agent kauft ein", "Kassensturz"].map((p, i) => `<span class="${i === phase ? "on" : ""}">${p}</span>`).join("");
+  $("phases").innerHTML = ["Einzahlen", "Agent kauft ein", "Kassensturz"].map((p, i) => `<span class="${i === phase ? "on" : ""}">${p}</span>`).join("")
+    + (unpaid === null ? `<span class="offline">Anfragen des Ladens nicht verfügbar</span>` : "");
 
-  const firstRender = seen.size === 0;
+  const firstRender = !ledgerRendered;
   $("ledger").innerHTML =
     entries
       .slice(0, 16)
@@ -96,18 +105,22 @@ async function poll() {
       })
       .join("") || `<tr><td class="time"></td><td>Noch keine Buchung. Scannt einen QR-Code links.</td><td></td></tr>`;
   entries.forEach((e) => seen.add(e.key));
+  ledgerRendered = true;
 
   // Show the preimage on paid tills, then replace them with a fresh invoice.
-  tills.forEach((till, i) => {
+  for (let i = 0; i < tills.length; i++) {
+    const till = tills[i];
     const paid = settled.find((s) => s.paymentRequest === till.request);
-    if (!paid || till.preimage) return;
-    till.preimage = toHex(paid.rPreimage as string);
-    renderTills();
-    setTimeout(async () => {
+    if (paid && !till.preimage) {
+      till.preimage = toHex(paid.rPreimage as string);
+      till.renewAt = Date.now() + 4000;
+      renderTills();
+    }
+    if (Date.now() >= till.renewAt) {
       tills[i] = await newInvoice(i);
       renderTills();
-    }, 4000);
-  });
+    }
+  }
 }
 
 async function loop() {
