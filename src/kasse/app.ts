@@ -4,6 +4,7 @@ import { catalog } from "../catalog";
 
 const DEPOSIT_SATS = 21;
 const INVOICE_EXPIRY_S = 7200;
+const RECEIPT_SHOWN_MS = 4000;
 const MEMO = "Budget für den Agenten";
 const ROWS = ["Reihen 1–2", "Reihen 3–4", "Reihen 5–6"];
 // lnget pays within a second or two. Older unpaid shop invoices count as refused purchases.
@@ -113,7 +114,7 @@ async function poll() {
     const paid = settled.find((s) => s.paymentRequest === till.request);
     if (paid && !till.preimage) {
       till.preimage = toHex(paid.rPreimage as string);
-      till.renewAt = Date.now() + 4000;
+      till.renewAt = Date.now() + RECEIPT_SHOWN_MS;
       renderTills();
     }
     if (Date.now() >= till.renewAt) {
