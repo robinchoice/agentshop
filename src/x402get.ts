@@ -1,7 +1,7 @@
 // Minimal x402 buyer for the demo, the x402 counterpart to lnget.
 // Usage: bun src/x402get.ts <url> [--max-cost '$0.10']
 import { parseArgs } from "node:util";
-import { wrapFetchWithPayment, x402Client, decodePaymentResponseHeader } from "@x402/fetch";
+import { wrapFetchWithPayment, x402Client, x402HTTPClient, decodePaymentResponseHeader } from "@x402/fetch";
 import { ExactEvmScheme } from "@x402/evm/exact/client";
 import { privateKeyToAccount } from "viem/accounts";
 import { network } from "./catalog";
@@ -22,14 +22,15 @@ const decode = (header: string) => JSON.parse(Buffer.from(header, "base64").toSt
 const account = privateKeyToAccount(key);
 const client = new x402Client()
   .register(network, new ExactEvmScheme(account))
-  .onBeforePaymentCreation(async ({ paymentRequired }) => {
+  .setSpendControls({ maxAmountPerPayment: values["max-cost"]! });
+const httpClient = new x402HTTPClient(client)
+  .onPaymentRequired(async ({ paymentRequired }) => {
     console.error("← 402 Payment Required");
     console.error(JSON.stringify(paymentRequired.accepts, null, 2));
-  })
-  .setSpendControls({ maxAmountPerPayment: values["max-cost"]! });
+  });
 
 try {
-  const res = await wrapFetchWithPayment(fetch, client)(url);
+  const res = await wrapFetchWithPayment(fetch, httpClient)(url);
   const receipt = res.headers.get("PAYMENT-RESPONSE");
   if (receipt) {
     const settled = decodePaymentResponseHeader(receipt);

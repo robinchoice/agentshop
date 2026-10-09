@@ -19,6 +19,7 @@ let tills: Till[] = [];
 let sturz = false;
 const seen = new Set<string>();
 let ledgerRendered = false;
+let unpaidAvailable = false;
 
 const itemName = (sats: number) => catalog.find((i) => i.sats === sats)?.name ?? `${sats} sats`;
 const clock = (unix: number) => new Date(unix * 1000).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
@@ -98,17 +99,17 @@ async function poll() {
     entries
       .slice(0, 16)
       .map((e) => {
-        const fresh = !firstRender && !seen.has(e.key);
+        const fresh = !firstRender && (e.kind !== "refused" || unpaidAvailable) && !seen.has(e.key);
         const amt = e.kind === "refused" ? "–" : `${e.kind === "in" ? "+" : "−"}${fmt(e.sats)}`;
         return `<tr class="${e.kind === "refused" ? "refused" : ""} ${fresh ? "new" : ""}"><td class="time">${clock(e.time)}</td><td>${e.text}</td><td class="amt ${e.kind}">${amt}</td></tr>`;
       })
       .join("") || `<tr><td class="time"></td><td>Noch keine Buchung. Scannt einen QR-Code links.</td><td></td></tr>`;
   entries.forEach((e) => seen.add(e.key));
   ledgerRendered = true;
+  unpaidAvailable = unpaid !== null;
 
   // Show the preimage on paid tills, then replace them with a fresh invoice.
-  for (let i = 0; i < tills.length; i++) {
-    const till = tills[i];
+  await Promise.all(tills.map(async (till, i) => {
     const paid = settled.find((s) => s.paymentRequest === till.request);
     if (paid && !till.preimage) {
       till.preimage = toHex(paid.rPreimage as string);
@@ -116,10 +117,15 @@ async function poll() {
       renderTills();
     }
     if (Date.now() >= till.renewAt) {
-      tills[i] = await newInvoice(i);
-      renderTills();
+      try {
+        tills[i] = await newInvoice(i);
+        renderTills();
+      } catch (err) {
+        console.error(err);
+        if (!$("phases").querySelector(".till-offline")) $("phases").insertAdjacentHTML("beforeend", `<span class="offline till-offline">QR-Rechnungen konnten nicht erneuert werden</span>`);
+      }
     }
-  }
+  }));
 }
 
 async function loop() {
@@ -127,7 +133,7 @@ async function loop() {
     await poll();
   } catch (err) {
     console.error(err);
-    if (!$("phases").querySelector(".offline")) $("phases").insertAdjacentHTML("beforeend", `<span class="offline">Verbindung zum Konto unterbrochen</span>`);
+    if (!$("phases").querySelector(".account-offline")) $("phases").insertAdjacentHTML("beforeend", `<span class="offline account-offline">Verbindung zum Konto unterbrochen</span>`);
   }
   setTimeout(loop, 2000);
 }

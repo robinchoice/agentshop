@@ -35,9 +35,10 @@ body { background: var(--sheet); color: var(--ink); font-family: "IBM Plex Sans"
 .bal { text-align: right; font-family: "IBM Plex Sans Condensed", sans-serif; }
 .bal b { font-size: clamp(48px, 6vw, 112px); font-weight: 700; line-height: .95; font-variant-numeric: tabular-nums; }
 .bal span { display: block; font-size: clamp(13px, 1.1vw, 18px); color: var(--muted); font-family: "IBM Plex Sans", sans-serif; }
-.phases { display: flex; gap: 8px; font-size: clamp(13px, 1.1vw, 18px); color: var(--muted); }
+.phases { display: flex; flex-wrap: wrap; gap: 8px; font-size: clamp(13px, 1.1vw, 18px); color: var(--muted); }
 .phases span { padding: 3px 10px; border-radius: 3px; border: 1px solid var(--line); }
 .phases span.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+.phases span.offline { color: var(--debit); border-color: var(--debit); }
 .rows { overflow: hidden; min-height: 0; }
 table { width: 100%; border-collapse: collapse; font-size: clamp(15px, 1.45vw, 26px); }
 td { padding: .45em 0; border-bottom: 1px solid var(--line); }
@@ -58,7 +59,8 @@ tr.new td { animation: flash 1.4s ease-out; }
   .till:nth-child(n+2) { display: none; }
   .till .qr { width: 140px; height: 140px; }
   .statement { padding: 16px 18px; }
-  .phases { display: none; }
+  .phases:not(:has(.offline)) { display: none; }
+  .phases span:not(.offline) { display: none; }
   .foot { flex-wrap: wrap; }
 }
 @media (prefers-reduced-motion: reduce) { tr.new td { animation: none; } }
