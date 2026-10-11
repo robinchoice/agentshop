@@ -110,14 +110,16 @@ async function poll() {
   if (unpaid !== null) unpaidRendered = true;
 
   // Show the preimage on paid tills, then replace them with a fresh invoice.
+  let changed = false;
   for (const till of tills) {
     const paid = settled.find((s) => s.paymentRequest === till.request);
     if (paid && !till.preimage) {
       till.preimage = toHex(paid.rPreimage as string);
       till.renewAt = Date.now() + RECEIPT_SHOWN_MS;
-      renderTills();
+      changed = true;
     }
   }
+  if (changed) renderTills();
 }
 
 async function renewTills() {
