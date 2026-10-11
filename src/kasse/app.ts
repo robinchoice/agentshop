@@ -10,7 +10,7 @@ const ROWS = ["Reihen 1–2", "Reihen 3–4", "Reihen 5–6"];
 // lnget pays within a second or two. Older unpaid shop invoices count as refused purchases.
 const REFUSED_AFTER_S = 8;
 
-type Till = { request: string; renewAt: number; preimage?: string };
+type Till = { request: string; renewAt: number; preimage?: string; renewalFailed?: boolean };
 type Entry = { key: string; time: number; text: string; sats: number; kind: "in" | "out" | "refused" };
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -20,7 +20,7 @@ let tills: Till[] = [];
 let sturz = false;
 const seen = new Set<string>();
 let ledgerRendered = false;
-let unpaidAvailable = false;
+let unpaidRendered = false;
 
 const itemName = (sats: number) => catalog.find((i) => i.sats === sats)?.name ?? `${sats} sats`;
 const clock = (unix: number) => new Date(unix * 1000).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
@@ -43,8 +43,8 @@ async function newInvoice(index: number): Promise<Till> {
 function renderTills() {
   $("tills").innerHTML = tills
     .map((t, i) => `<div class="till">
-      <div class="qr">${qrSvg(t.request)}${t.preimage ? `<div class="paid"><b>Bezahlt</b><span>Eure Quittung, der Preimage:</span><code>${t.preimage.slice(0, 32)}…</code></div>` : ""}</div>
-      <p>QR ${i + 1}<span>${ROWS[i]}</span></p>
+      <div class="qr">${t.renewalFailed && !t.preimage ? `<div class="unavailable">QR nicht verfügbar</div>` : qrSvg(t.request)}${t.preimage ? `<div class="paid"><b>Bezahlt</b><span>Eure Quittung, der Preimage:</span><code>${t.preimage.slice(0, 32)}…</code></div>` : ""}</div>
+      <p>QR ${i + 1}<span>${ROWS[i]}</span>${t.renewalFailed ? `<span class="offline">QR konnte nicht erneuert werden</span>` : ""}</p>
     </div>`)
     .join("");
 }
@@ -100,30 +100,38 @@ async function poll() {
     entries
       .slice(0, 16)
       .map((e) => {
-        const fresh = !firstRender && (e.kind !== "refused" || unpaidAvailable) && !seen.has(e.key);
+        const fresh = !firstRender && (e.kind !== "refused" || unpaidRendered) && !seen.has(e.key);
         const amt = e.kind === "refused" ? "–" : `${e.kind === "in" ? "+" : "−"}${fmt(e.sats)}`;
         return `<tr class="${e.kind === "refused" ? "refused" : ""} ${fresh ? "new" : ""}"><td class="time">${clock(e.time)}</td><td>${e.text}</td><td class="amt ${e.kind}">${amt}</td></tr>`;
       })
       .join("") || `<tr><td class="time"></td><td>Noch keine Buchung. Scannt einen QR-Code links.</td><td></td></tr>`;
   entries.forEach((e) => seen.add(e.key));
   ledgerRendered = true;
-  unpaidAvailable = unpaid !== null;
+  if (unpaid !== null) unpaidRendered = true;
 
   // Show the preimage on paid tills, then replace them with a fresh invoice.
-  await Promise.all(tills.map(async (till, i) => {
+  for (const till of tills) {
     const paid = settled.find((s) => s.paymentRequest === till.request);
     if (paid && !till.preimage) {
       till.preimage = toHex(paid.rPreimage as string);
       till.renewAt = Date.now() + RECEIPT_SHOWN_MS;
       renderTills();
     }
+  }
+}
+
+async function renewTills() {
+  await Promise.all(tills.map(async (till, i) => {
     if (Date.now() >= till.renewAt) {
       try {
         tills[i] = await newInvoice(i);
         renderTills();
       } catch (err) {
         console.error(err);
-        if (!$("phases").querySelector(".till-offline")) $("phases").insertAdjacentHTML("beforeend", `<span class="offline till-offline">QR-Rechnungen konnten nicht erneuert werden</span>`);
+        if (!till.renewalFailed) {
+          till.renewalFailed = true;
+          renderTills();
+        }
       }
     }
   }));
@@ -134,8 +142,9 @@ async function loop() {
     await poll();
   } catch (err) {
     console.error(err);
-    if (!$("phases").querySelector(".account-offline")) $("phases").insertAdjacentHTML("beforeend", `<span class="offline account-offline">Verbindung zum Konto unterbrochen</span>`);
+    $("phases").innerHTML = `<span class="offline account-offline">Verbindung zum Konto unterbrochen</span>`;
   }
+  await renewTills();
   setTimeout(loop, 2000);
 }
 
