@@ -37,7 +37,8 @@ for (const item of catalog) {
 }
 
 const l402Port = Number(process.env.L402_BACKEND_PORT ?? 8401);
+const l402Host = process.env.L402_BACKEND_HOST ?? "127.0.0.1";
 const x402Port = Number(process.env.X402_PORT ?? 8403);
-Bun.serve({ port: l402Port, fetch: l402.fetch });
+Bun.serve({ hostname: l402Host, port: l402Port, fetch: l402.fetch });
 Bun.serve({ port: x402Port, fetch: x402.fetch });
 console.log(`L402 backend on :${l402Port} (behind Aperture), x402 checkout on :${x402Port}`);

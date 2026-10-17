@@ -49,6 +49,10 @@ function renderTills() {
       <p>QR ${i + 1}<span>${ROWS[i]}</span>${t.renewalFailed ? `<span class="offline">QR konnte nicht erneuert werden</span>` : ""}</p>
     </div>`)
     .join("");
+  renderTillOffline();
+}
+
+function renderTillOffline() {
   $("phases").querySelector(".till-offline")?.remove();
   if (tills.some((t) => t.renewalFailed)) $("phases").insertAdjacentHTML("beforeend", `<span class="offline till-offline">QR-Rechnungen konnten nicht erneuert werden</span>`);
 }
@@ -57,8 +61,12 @@ function renderFootRight() {
   const cap = localStorage.getItem("kasse-cap") ?? "50";
   $("footRight").innerHTML = sturz
     ? `Rest <b id="rest">${$("balance").textContent}</b> geht an OpenSats`
-    : `Höchstpreis pro Kauf <input id="cap" inputmode="numeric" value="${cap}" aria-label="Höchstpreis pro Kauf in sats">`;
-  $<HTMLInputElement>("cap")?.addEventListener("input", (e) => localStorage.setItem("kasse-cap", (e.target as HTMLInputElement).value));
+    : `Höchstpreis pro Kauf <input id="cap" inputmode="numeric" aria-label="Höchstpreis pro Kauf in sats">`;
+  const input = $<HTMLInputElement>("cap");
+  if (input) {
+    input.value = cap;
+    input.addEventListener("input", () => localStorage.setItem("kasse-cap", input.value));
+  }
 }
 
 async function poll() {
@@ -97,8 +105,8 @@ async function poll() {
 
   const phase = sturz ? 2 : entries.some((e) => e.kind !== "in") ? 1 : 0;
   $("phases").innerHTML = ["Einzahlen", "Agent kauft ein", "Kassensturz"].map((p, i) => `<span class="${i === phase ? "on" : ""}">${p}</span>`).join("")
-    + (unpaid === null ? `<span class="offline">Anfragen des Ladens nicht verfügbar</span>` : "")
-    + (tills.some((t) => t.renewalFailed) ? `<span class="offline till-offline">QR-Rechnungen konnten nicht erneuert werden</span>` : "");
+    + (unpaid === null ? `<span class="offline">Anfragen des Ladens nicht verfügbar</span>` : "");
+  renderTillOffline();
 
   const firstRender = !ledgerRendered;
   $("ledger").innerHTML =
@@ -107,9 +115,12 @@ async function poll() {
       .map((e) => {
         const fresh = !firstRender && (e.kind !== "refused" || unpaidAvailable) && !seen.has(e.key);
         const amt = e.kind === "refused" ? "–" : `${e.kind === "in" ? "+" : "−"}${fmt(e.sats)}`;
-        return `<tr class="${e.kind === "refused" ? "refused" : ""} ${fresh ? "new" : ""}"><td class="time">${clock(e.time)}</td><td>${e.text}</td><td class="amt ${e.kind}">${amt}</td></tr>`;
+        return `<tr class="${e.kind === "refused" ? "refused" : ""} ${fresh ? "new" : ""}"><td class="time">${clock(e.time)}</td><td></td><td class="amt ${e.kind}">${amt}</td></tr>`;
       })
       .join("") || `<tr><td class="time"></td><td>Noch keine Buchung. Scannt einen QR-Code links.</td><td></td></tr>`;
+  entries.slice(0, 16).forEach((e, i) => {
+    $("ledger").querySelectorAll("tr")[i]!.children[1]!.textContent = e.text;
+  });
   entries.forEach((e) => seen.add(e.key));
   ledgerRendered = true;
   unpaidAvailable = unpaid !== null;
@@ -167,11 +178,11 @@ async function loop() {
 }
 
 async function start() {
-  $("login").hidden = true;
-  $("kasse").hidden = false;
   tills = await Promise.all(ROWS.map((_, i) => newInvoice(i)));
   renderTills();
   renderFootRight();
+  $("login").hidden = true;
+  $("kasse").hidden = false;
   loop();
 }
 
@@ -188,8 +199,12 @@ $("login").addEventListener("submit", async (e) => {
   const password = $<HTMLInputElement>("password").value;
   $("loginError").textContent = "";
   try {
-    if (phrase) await lnc.pair(phrase, { method: "password", password });
-    else await lnc.login({ method: "password", password });
+    if (!lnc.isConnected) {
+      if (phrase) {
+        await lnc.pair(phrase, { method: "password", password });
+        $<HTMLInputElement>("phrase").value = "";
+      } else await lnc.login({ method: "password", password });
+    }
     await start();
   } catch (err) {
     $("loginError").textContent = `Verbindung fehlgeschlagen: ${(err as Error).message}`;
@@ -198,7 +213,13 @@ $("login").addEventListener("submit", async (e) => {
 
 const auth = await lnc.getAuthenticationInfo();
 if (auth.hasActiveSession) {
-  await lnc.login({ method: "session" }).then(start, () => ($("login").hidden = false));
+  try {
+    await lnc.login({ method: "session" });
+    await start();
+  } catch (err) {
+    $("loginError").textContent = `Verbindung fehlgeschlagen: ${(err as Error).message}`;
+    $("login").hidden = false;
+  }
 } else {
   if (auth.hasStoredCredentials) {
     $("phraseLabel").hidden = true;

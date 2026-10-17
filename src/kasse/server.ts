@@ -19,8 +19,8 @@ async function unpaidRequests() {
   const groups: { id: string; sats: number; created: number; settled: boolean }[] = [];
   for (const i of invoices.toSorted((a, b) => Number(a.creation_date) - Number(b.creation_date))) {
     const sats = Number(i.value), created = Number(i.creation_date), settled = i.state === "SETTLED";
-    const last = groups.at(-1);
-    if (last && last.sats === sats && created - last.created <= 3) last.settled ||= settled;
+    const group = groups.findLast((g) => g.sats === sats && created - g.created <= 3);
+    if (group) group.settled ||= settled;
     else groups.push({ id: i.r_hash, sats, created, settled });
   }
   return groups.filter((g) => !g.settled).map(({ id, sats, created }) => ({ id, sats, created }));

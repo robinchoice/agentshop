@@ -60,6 +60,7 @@ services:
     command: [bun, src/shop.ts]
     environment:
       X402_PAY_TO: ${X402_PAY_TO:?set X402_PAY_TO in .env}
+      L402_BACKEND_HOST: 0.0.0.0
     volumes:
       - ..:/app:ro
     ports:

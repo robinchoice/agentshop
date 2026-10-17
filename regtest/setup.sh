@@ -31,21 +31,34 @@ wait_for funded bank
 wait_for funded laden
 
 bank_id=$(ln bank getinfo | jq -r .identity_pubkey)
+laden_id=$(ln laden getinfo | jq -r .identity_pubkey)
 ln laden connect "$bank_id@bank:9735" >/dev/null || true
-ln bank openchannel --node_key "$(ln laden getinfo | jq -r .identity_pubkey)" --local_amt 1000000 >/dev/null
+has_channel() {
+  ln "$1" listchannels | jq -e --arg peer "$2" '.channels[] | select(.remote_pubkey == $peer and .initiator)' >/dev/null
+}
+if ! has_channel bank "$laden_id"; then
+  ln bank openchannel --node_key "$laden_id" --local_amt 1000000 >/dev/null
+fi
 mine 1
-ln laden openchannel --node_key "$bank_id" --local_amt 1000000 >/dev/null
+if ! has_channel laden "$bank_id"; then
+  ln laden openchannel --node_key "$bank_id" --local_amt 1000000 >/dev/null
+fi
 mine 6
-channels_active() { [ "$(ln bank listchannels | jq '[.channels[] | select(.active)] | length')" -eq 2 ]; }
+channels_active() {
+  ln bank listchannels | jq -e --arg peer "$laden_id" \
+    '[.channels[] | select(.active and .remote_pubkey == $peer) | .initiator] | any(. == true) and any(. == false)' >/dev/null
+}
 wait_for channels_active
 
 wait_for lit accounts list
-lit accounts create 0 --label agent --save_to /root/.lit/agent.macaroon >/dev/null
-account=$(lit accounts list | jq -r '.accounts[] | select(.label == "agent") | .id')
+if ! lit accounts list | jq -e 'any(.accounts[]; .label == "agent")' >/dev/null; then
+  lit accounts create 0 --label agent --save_to /root/.lit/agent.macaroon >/dev/null
+fi
+account=$(lit accounts list | jq -r 'first(.accounts[] | select(.label == "agent") | .id)')
 phrase=$(lit sessions add --label agent --type account --account_id "$account" | jq -r .session.pairing_secret_mnemonic)
 
 # The beamer checkout reads the shop's unpaid invoices with this macaroon.
 dc cp laden:/root/.lnd/data/chain/bitcoin/regtest/readonly.macaroon laden-readonly.macaroon >/dev/null
 
-echo "Account agent: $account (balance 0, fill it with regtest/publikum.sh)"
+echo "Account agent: $account (fill it with regtest/publikum.sh)"
 echo "LNC pairing phrase for lnget: $phrase"
