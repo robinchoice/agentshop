@@ -21,7 +21,7 @@
 
   <div id="kasse" class="kasse" hidden>
     <section class="tills">
-      <h2>Zahlt 21 sats ins Budget<small>Jeder QR-Code gilt für eine Zahlung und erneuert sich danach.</small></h2>
+      <h2>Zahlt <span id="depositSats"></span> sats ins Budget<small>Jeder QR-Code gilt für eine Zahlung und erneuert sich danach.</small></h2>
       <div id="tills"></div>
     </section>
     <section class="statement">
@@ -34,7 +34,10 @@
       <div class="foot">
         <span>Eingezahlt <b id="paidIn">0</b> von <span id="payers">0</span> Leuten</span>
         <span>Ausgegeben <b id="spent">0</b></span>
-        <span id="footRight"></span>
+        <span id="footRight">
+          <span id="purchaseCap">Höchstpreis pro Kauf <input id="cap" inputmode="numeric" aria-label="Höchstpreis pro Kauf in sats"></span>
+          <span id="finalTally" hidden>Rest <b id="rest">–</b> geht an OpenSats</span>
+        </span>
       </div>
     </section>
   </div>

@@ -11,7 +11,7 @@ const ROWS = ["Reihen 1–2", "Reihen 3–4", "Reihen 5–6"];
 // lnget pays within a second or two. Older unpaid shop invoices count as refused purchases.
 const REFUSED_AFTER_S = 8;
 
-type Till = { request: string; expiresAt: number; renewAt: number; retryAt?: number; preimage?: string; renewalFailed?: boolean; unavailable?: boolean };
+type Till = { request: string; qr: string; expiresAt: number; renewAt: number; retryAt?: number; preimage?: string; unavailable?: boolean };
 type Entry = { key: string; time: number; text: string; sats: number; kind: "in" | "out" | "refused" };
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -39,14 +39,14 @@ function qrSvg(request: string) {
 async function newInvoice(index: number): Promise<Till> {
   const res = await lnc.lnd.lightning.addInvoice({ value: String(DEPOSIT_SATS), memo: `${MEMO}, QR ${index + 1}`, expiry: String(INVOICE_EXPIRY_S) });
   const expiresAt = Date.now() + INVOICE_EXPIRY_S * 1000;
-  return { request: res.paymentRequest, expiresAt, renewAt: expiresAt - 30000 };
+  return { request: res.paymentRequest, qr: qrSvg(res.paymentRequest), expiresAt, renewAt: expiresAt - 30000 };
 }
 
 function renderTills() {
   $("tills").innerHTML = tills
     .map((t, i) => `<div class="till">
-      <div class="qr">${t.unavailable ? `<div class="unavailable">QR nicht verfügbar</div>` : qrSvg(t.request)}${t.preimage && !t.unavailable ? `<div class="paid"><b>Bezahlt</b><span>Eure Quittung, der Preimage:</span><code>${t.preimage.slice(0, 32)}…</code></div>` : ""}</div>
-      <p>QR ${i + 1}<span>${ROWS[i]}</span>${t.renewalFailed ? `<span class="offline">QR konnte nicht erneuert werden</span>` : ""}</p>
+      <div class="qr">${t.unavailable ? `<div class="unavailable">QR nicht verfügbar</div>` : t.qr}${t.preimage && !t.unavailable ? `<div class="paid"><b>Bezahlt</b><span>Eure Quittung, der Preimage:</span><code>${t.preimage.slice(0, 32)}…</code></div>` : ""}</div>
+      <p>QR ${i + 1}<span>${ROWS[i]}</span>${t.retryAt ? `<span class="offline">QR konnte nicht erneuert werden</span>` : ""}</p>
     </div>`)
     .join("");
   renderTillOffline();
@@ -54,20 +54,16 @@ function renderTills() {
 
 function renderTillOffline() {
   $("phases").querySelector(".till-offline")?.remove();
-  if (tills.some((t) => t.renewalFailed)) $("phases").insertAdjacentHTML("beforeend", `<span class="offline till-offline">QR-Rechnungen konnten nicht erneuert werden</span>`);
+  if (tills.some((t) => t.retryAt)) $("phases").insertAdjacentHTML("beforeend", `<span class="offline till-offline">QR-Rechnungen konnten nicht erneuert werden</span>`);
 }
 
 function renderFootRight() {
-  const cap = localStorage.getItem("kasse-cap") ?? "50";
-  $("footRight").innerHTML = sturz
-    ? `Rest <b id="rest">${$("balance").textContent}</b> geht an OpenSats`
-    : `Höchstpreis pro Kauf <input id="cap" inputmode="numeric" aria-label="Höchstpreis pro Kauf in sats">`;
-  const input = $<HTMLInputElement>("cap");
-  if (input) {
-    input.value = cap;
-    input.addEventListener("input", () => localStorage.setItem("kasse-cap", input.value));
-  }
+  $("purchaseCap").hidden = sturz;
+  $("finalTally").hidden = !sturz;
 }
+
+const cap = $<HTMLInputElement>("cap");
+cap.addEventListener("input", () => localStorage.setItem("kasse-cap", cap.value));
 
 async function poll() {
   const [balance, { invoices }, { payments }, unpaid] = await Promise.all([
@@ -101,7 +97,7 @@ async function poll() {
   $("paidIn").textContent = fmt(paidIn);
   $("payers").textContent = String(settled.length);
   $("spent").textContent = fmt(bought.reduce((s, p) => s + Number(p.valueSat), 0));
-  if ($("rest")) $("rest").textContent = fmt(bal);
+  $("rest").textContent = fmt(bal);
 
   const phase = sturz ? 2 : entries.some((e) => e.kind !== "in") ? 1 : 0;
   $("phases").innerHTML = ["Einzahlen", "Agent kauft ein", "Kassensturz"].map((p, i) => `<span class="${i === phase ? "on" : ""}">${p}</span>`).join("")
@@ -153,11 +149,8 @@ async function renewTills(accountAvailable: boolean) {
         changed = true;
       } catch (err) {
         console.error(err);
+        if (!till.retryAt) changed = true;
         till.retryAt = Date.now() + RENEW_RETRY_MS;
-        if (!till.renewalFailed) {
-          till.renewalFailed = true;
-          changed = true;
-        }
       }
     }
   }));
@@ -179,7 +172,9 @@ async function loop() {
 
 async function start() {
   tills = await Promise.all(ROWS.map((_, i) => newInvoice(i)));
+  $("depositSats").textContent = String(DEPOSIT_SATS);
   renderTills();
+  cap.value = localStorage.getItem("kasse-cap") ?? "50";
   renderFootRight();
   $("login").hidden = true;
   $("kasse").hidden = false;
