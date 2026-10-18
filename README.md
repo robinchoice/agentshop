@@ -59,7 +59,7 @@ Tear down with `docker compose -f regtest/compose.yml --env-file .env down -v`.
 
 ## Secret scan
 
-`.github/workflows/secrets.yml` scans new commits on every push and fork PR with a digest-pinned gitleaks Docker image, without path exclusions. Findings fail CI; `--redact` keeps values out of public logs. `.gitleaks.toml` enables all default rules without exceptions, including under `regtest/`. Any necessary exception must be limited to a specific public test value and path, with a comment. Report real findings by location only; Robin decides credential rotation.
+`.github/workflows/secrets.yml` scans new commits on every push and fork PR with a digest-pinned gitleaks Docker image, without path exclusions. Findings fail CI; `--redact` keeps values out of public logs. `.gitleaks.toml` enables all default rules without exceptions, including under `regtest/`. Any necessary exception must be limited to a specific public test value and path, with a comment.
 
 ## License
 

@@ -1,3 +1,3 @@
-# Use all default rules without exceptions; the full history scan found no leaks.
+# Default rules only; add narrowly scoped, commented exceptions here.
 [extend]
 useDefault = true
