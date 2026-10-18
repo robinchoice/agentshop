@@ -18,3 +18,4 @@ None. Pushing to `main` only publishes the code.
 - Item content and the beamer checkout (`src/kasse/`) are German, the workshop runs in German.
 - `:8401` (`/l402/<item>`) leaves payment to Aperture and must only be reachable through it.
 - `.env` holds `X402_PAY_TO` and stays out of git.
+- `.github/workflows/secrets.yml` scans every push and fork PR with gitleaks and `--redact`; keep any future exceptions narrowly scoped in `.gitleaks.toml` (see README).

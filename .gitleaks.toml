@@ -1,0 +1,3 @@
+# Use all default rules without exceptions; the full history scan found no leaks.
+[extend]
+useDefault = true
