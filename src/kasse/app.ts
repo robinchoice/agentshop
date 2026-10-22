@@ -8,8 +8,6 @@ const RECEIPT_SHOWN_MS = 4000;
 const RENEW_RETRY_MS = 10000;
 const MEMO = "Budget für den Agenten";
 const ROWS = ["Reihen 1–2", "Reihen 3–4", "Reihen 5–6"];
-// lnget pays within a second or two. Older unpaid shop invoices count as refused purchases.
-const REFUSED_AFTER_S = 8;
 
 type Till = { request: string; qr: string; expiresAt: number; renewAt: number; retryAt?: number; preimage?: string; unavailable?: boolean };
 type Entry = { key: string; time: number; text: string; sats: number; kind: "in" | "out" | "refused" };
@@ -66,11 +64,11 @@ const cap = $<HTMLInputElement>("cap");
 cap.addEventListener("input", () => localStorage.setItem("kasse-cap", cap.value));
 
 async function poll() {
-  const [balance, { invoices }, { payments }, unpaid] = await Promise.all([
+  const [balance, { invoices }, { payments }, refused] = await Promise.all([
     lnc.lnd.lightning.channelBalance(),
     lnc.lnd.lightning.listInvoices({ numMaxInvoices: "1000", reversed: true }),
     lnc.lnd.lightning.listPayments({ includeIncomplete: false }),
-    fetch("/api/unpaid").then((r) => {
+    fetch("/api/refused").then((r) => {
       if (!r.ok) throw new Error(`Shop invoice lookup failed: HTTP ${r.status}`);
       return r.json() as Promise<{ id: string; sats: number; created: number }[]>;
     }).catch((err) => {
@@ -81,14 +79,11 @@ async function poll() {
 
   const settled = invoices.filter((i) => i.state === ("SETTLED" as never) && i.memo.startsWith(MEMO));
   const bought = payments.filter((p) => p.status === ("SUCCEEDED" as never));
-  const now = Date.now() / 1000;
 
   const entries: Entry[] = [
     ...settled.map((i) => ({ key: i.paymentRequest, time: Number(i.settleDate), text: `Einzahlung über ${i.memo.split(", ")[1] ?? "QR"}`, sats: Number(i.value), kind: "in" as const })),
     ...bought.map((p) => ({ key: p.paymentHash, time: Number(p.creationDate), text: `Agent kauft ${itemName(Number(p.valueSat))} per L402`, sats: Number(p.valueSat), kind: "out" as const })),
-    ...(unpaid ?? [])
-      .filter((u) => now - u.created > REFUSED_AFTER_S)
-      .map((u) => ({ key: u.id, time: u.created, text: `${itemName(u.sats)} angefragt, nicht bezahlt (${u.sats} sats)`, sats: 0, kind: "refused" as const })),
+    ...(refused ?? []).map((u) => ({ key: u.id, time: u.created, text: `${itemName(u.sats)} angefragt, nicht bezahlt (${u.sats} sats)`, sats: 0, kind: "refused" as const })),
   ].sort((a, b) => b.time - a.time);
 
   const bal = Number(balance.localBalance?.sat ?? balance.balance);
@@ -101,7 +96,7 @@ async function poll() {
 
   const phase = sturz ? 2 : entries.some((e) => e.kind !== "in") ? 1 : 0;
   $("phases").innerHTML = ["Einzahlen", "Agent kauft ein", "Kassensturz"].map((p, i) => `<span class="${i === phase ? "on" : ""}">${p}</span>`).join("")
-    + (unpaid === null ? `<span class="offline">Anfragen des Ladens nicht verfügbar</span>` : "");
+    + (refused === null ? `<span class="offline">Anfragen des Ladens nicht verfügbar</span>` : "");
   renderTillOffline();
 
   const firstRender = !ledgerRendered;
@@ -119,7 +114,7 @@ async function poll() {
   });
   entries.forEach((e) => seen.add(e.key));
   ledgerRendered = true;
-  unpaidAvailable = unpaid !== null;
+  unpaidAvailable = refused !== null;
 
   // Show the preimage on paid tills, then replace them with a fresh invoice.
   let changed = false;

@@ -1,5 +1,5 @@
 // Beamer checkout. The page talks to the agent's account via LNC in the browser.
-// This server only adds what the bank cannot see: invoices the shop issued that the agent did not pay.
+// This server only adds what the bank cannot see: requests to the shop that the agent did not pay.
 import page from "./index.html";
 
 const ladenUrl = process.env.LADEN_REST_URL ?? "https://localhost:8081";
@@ -7,9 +7,12 @@ const macaroonPath = process.env.LADEN_MACAROON;
 if (!macaroonPath) throw new Error("LADEN_MACAROON is not set (path to the shop node's readonly or invoice macaroon)");
 const macaroon = Buffer.from(await Bun.file(macaroonPath).arrayBuffer()).toString("hex");
 
+// lnget pays within a second or two. Older unpaid shop invoices count as refused purchases.
+const REFUSED_AFTER_S = 8;
+
 // One L402 request makes Aperture issue two invoices for the same item within a second or two.
-// Group them and report a group as unpaid only if none of its invoices was settled.
-async function unpaidRequests() {
+// Group them and report a group as refused only if none of its invoices was settled.
+async function refusedRequests() {
   const res = await fetch(`${ladenUrl}/v1/invoices?reversed=true&num_max_invoices=200`, {
     headers: { "Grpc-Metadata-macaroon": macaroon },
     tls: { rejectUnauthorized: false },
@@ -23,7 +26,8 @@ async function unpaidRequests() {
     if (group) group.settled ||= settled;
     else groups.push({ id: i.r_hash, sats, created, settled });
   }
-  return groups.filter((g) => !g.settled).map(({ id, sats, created }) => ({ id, sats, created }));
+  const now = Date.now() / 1000;
+  return groups.filter((g) => !g.settled && now - g.created > REFUSED_AFTER_S).map(({ id, sats, created }) => ({ id, sats, created }));
 }
 
 const port = Number(process.env.KASSE_PORT ?? 8404);
@@ -32,7 +36,7 @@ Bun.serve({
   development: false,
   routes: {
     "/": page,
-    "/api/unpaid": async () => Response.json(await unpaidRequests()),
+    "/api/refused": async () => Response.json(await refusedRequests()),
   },
 });
 console.log(`Beamer checkout on http://localhost:${port}`);
