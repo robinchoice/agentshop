@@ -7,7 +7,7 @@
 
 ## Checks
 
-`bun run typecheck`. For changes to the checkout flows, run the regtest demo from the README end to end.
+`bun run typecheck` and `bun test`. For changes to the checkout flows, run the regtest demo from the README end to end.
 
 ## Deploy
 
