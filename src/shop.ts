@@ -28,13 +28,12 @@ x402.use(
     resourceServer,
   ),
 );
+// Hono runs handlers in registration order: the item routes must stay below the middleware.
+for (const item of catalog) x402.get(`/x402/${item.id}`, (c) => c.json(item.content()));
 
 // L402 checkout: only reachable through Aperture, which handles payment.
 const l402 = new Hono();
-for (const item of catalog) {
-  l402.get(`/l402/${item.id}`, (c) => c.json(item.content()));
-  x402.get(`/x402/${item.id}`, (c) => c.json(item.content()));
-}
+for (const item of catalog) l402.get(`/l402/${item.id}`, (c) => c.json(item.content()));
 
 const l402Port = Number(process.env.L402_BACKEND_PORT ?? 8401);
 const l402Host = process.env.L402_BACKEND_HOST ?? "127.0.0.1";
