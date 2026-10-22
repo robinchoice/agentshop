@@ -1,7 +1,8 @@
 // Minimal x402 buyer for the demo, the x402 counterpart to lnget.
 // Usage: bun src/x402get.ts <url> [--max-cost '$0.10']
 import { parseArgs } from "node:util";
-import { wrapFetchWithPayment, x402Client, x402HTTPClient, decodePaymentResponseHeader } from "@x402/fetch";
+import { wrapFetchWithPayment, x402Client, x402HTTPClient } from "@x402/fetch";
+import { decodePaymentRequiredHeader, decodePaymentResponseHeader } from "@x402/core/http";
 import { ExactEvmScheme } from "@x402/evm/exact/client";
 import { privateKeyToAccount } from "viem/accounts";
 import { network } from "./catalog";
@@ -16,8 +17,6 @@ if (!url || !key) {
   console.error("usage: EVM_PRIVATE_KEY=0x… bun src/x402get.ts <url> [--max-cost '$0.10']");
   process.exit(1);
 }
-
-const decode = (header: string) => JSON.parse(Buffer.from(header, "base64").toString());
 
 const account = privateKeyToAccount(key);
 const client = new x402Client()
@@ -39,7 +38,7 @@ try {
   }
   if (!res.ok) {
     const required = res.headers.get("PAYMENT-REQUIRED");
-    console.error(`✗ ${res.status} ${required ? decode(required).error : res.statusText}`);
+    console.error(`✗ ${res.status} ${required ? decodePaymentRequiredHeader(required).error : res.statusText}`);
     process.exit(3);
   }
   console.log(JSON.stringify(await res.json(), null, 2));
